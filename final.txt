@@ -1,0 +1,102 @@
+import sqlite3
+import requests
+from bs4 import BeautifulSoup
+
+def create_database():
+    conn = sqlite3.connect("websites.db")
+    cursor = conn.cursor()
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS websites (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            url TEXT NOT NULL
+        )
+    """)
+    conn.commit()
+    conn.close()
+
+def add_website(url):
+    conn = sqlite3.connect("websites.db")
+    cursor = conn.cursor()
+    cursor.execute("INSERT INTO websites (url) VALUES (?)", (url,))
+    conn.commit()
+    conn.close()
+
+def clear_database():
+    conn = sqlite3.connect("websites.db")
+    cursor = conn.cursor()
+    cursor.execute("DELETE FROM websites")
+    conn.commit()
+    conn.close()
+
+def get_websites():
+    conn = sqlite3.connect("websites.db")
+    cursor = conn.cursor()
+    cursor.execute("SELECT url FROM websites")
+    websites = [row[0] for row in cursor.fetchall()]
+    conn.close()
+    return websites
+
+def search_query(query):
+    websites = get_websites()
+    results = []
+
+    for url in websites:
+        try:
+            response = requests.get(url, timeout=10)
+            response.raise_for_status()
+            soup = BeautifulSoup(response.text, "html.parser")
+            text = soup.get_text().lower()
+            count = text.count(query.lower())
+            if count > 0:
+                results.append((url, count))
+        except requests.RequestException:
+            print(f"Could not fetch {url}")
+
+    results.sort(key=lambda x: x[1], reverse=True)
+    return results
+
+def main():
+    create_database()
+
+    while True:
+        print("\nMenu:")
+        print("1. Add website")
+        print("2. Clear all websites")
+        print("3. Search query")
+        print("4. Show all websites")
+        print("5. Exit")
+
+        choice = input("Choose an option: ")
+
+        if choice == "1":
+            url = input("Enter website URL: ")
+            add_website(url)
+            print("Website added successfully")
+        elif choice == "2":
+            clear_database()
+            print("Database cleared")
+        elif choice == "3":
+            query = input("Enter search query: ")
+            results = search_query(query)
+            if results:
+                print("\nSearch Results:")
+                for url, count in results:
+                    print(f"{url} - {count} occurrences")
+            else:
+                print("No results found")
+        elif choice == "4":
+            websites = get_websites()
+            if websites:
+                print("\nWebsites in database:")
+                for website in websites:
+                    print(website)
+            else:
+                print("No websites in the database")
+        elif choice == "5":
+            print("Exiting program")
+            break
+        else:
+            print("Invalid option. Please try again")
+
+if __name__ == "__main__":
+    main()
